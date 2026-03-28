@@ -1,234 +1,236 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Dimensions, RefreshControl,
+  RefreshControl, Dimensions,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import { Storage } from '../services/storage';
-import { Client, Dish } from '../types';
+import { Client } from '../types';
 
 const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
 
 export default function DashboardScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [clients, setClients] = useState<Client[]>([]);
-  const [dishCounts, setDishCounts] = useState<Record<string, number>>({});
-  const [scanCounts, setScanCounts] = useState<Record<string, number>>({});
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => {
-    const cls = await Storage.getClients();
-    setClients(cls);
-    const dc: Record<string, number> = {};
-    const sc: Record<string, number> = {};
-    for (const c of cls) {
-      const dishes = await Storage.getDishes(c.id);
-      dc[c.id] = dishes.length;
-      sc[c.id] = dishes.reduce((s, d) => s + (d.scans || 0), 0);
-    }
-    setDishCounts(dc);
-    setScanCounts(sc);
-  };
+  const load = useCallback(async () => {
+    const data = await Storage.getClients();
+    setClients(data);
+  }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useEffect(() => { load(); }, [load]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
-  };
+  }, [load]);
 
-  const totalDishes = Object.values(dishCounts).reduce((a, b) => a + b, 0);
-  const totalScans = Object.values(scanCounts).reduce((a, b) => a + b, 0);
-
-  const addClient = async () => {
-    const cls = await Storage.getClients();
-    cls.push({
-      id: 'c' + Date.now(),
-      name: 'Nouveau Restaurant',
-      sub: 'À configurer',
-      color: '#0047FF',
-      logo: '',
-      banner: '',
-      status: 'draft',
-    });
-    await Storage.saveClients(cls);
-    load();
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    live: { bg: COLORS.greenLight, text: COLORS.green },
+    draft: { bg: COLORS.yellowLight, text: COLORS.yellow },
   };
 
   return (
-    <View style={styles.container}>
-      {/* Top bar */}
-      <View style={styles.topbar}>
-        <View style={styles.logoRow}>
-          <View style={styles.logoIcon}>
-            <Text style={styles.logoIconText}>◆</Text>
-          </View>
-          <Text style={styles.logoText}>Menu<Text style={{ color: COLORS.brand }}>3D</Text></Text>
+    <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>MENU3D</Text>
+          <Text style={styles.subtitle}>Vos restaurants</Text>
         </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>A</Text>
+        <TouchableOpacity style={styles.menuBtn}>
+          <Text style={styles.menuIcon}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Stats */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{clients.length}</Text>
+          <Text style={styles.statLabel}>Restaurants</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{clients.filter(c => c.status === 'live').length}</Text>
+          <Text style={styles.statLabel}>En ligne</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={[styles.statNum, { color: COLORS.cyan }]}>3D</Text>
+          <Text style={styles.statLabel}>& AR</Text>
         </View>
       </View>
 
+      {/* Client List */}
       <ScrollView
-        style={styles.scroll}
+        style={styles.list}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brand} />}
       >
-        {/* Metrics */}
-        <View style={styles.metrics}>
-          <MetricCard icon="👥" value={clients.filter(c => c.status === 'live').length.toString()} label="Clients actifs" trend="↑ 3" />
-          <MetricCard icon="🍽" value={totalDishes.toString()} label="Plats 3D" trend="↑ 12%" />
-          <MetricCard icon="📱" value={totalScans.toLocaleString()} label="Scans AR" trend="↑ 28%" />
-          <MetricCard icon="📈" value="34.7%" label="Conversion" trend="↑ 5%" />
-        </View>
-
-        {/* Section header */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mes Clients</Text>
-          <TouchableOpacity style={styles.btnPrimary} onPress={addClient}>
-            <Text style={styles.btnPrimaryText}>+ Nouveau</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Client cards */}
-        <View style={styles.clientsGrid}>
-          {clients.map(c => (
+        {clients.map((client) => {
+          const st = statusColors[client.status] || statusColors.draft;
+          return (
             <TouchableOpacity
-              key={c.id}
-              style={styles.clientCard}
-              onPress={() => navigation.navigate('Workspace', { clientId: c.id })}
+              key={client.id}
+              style={styles.card}
               activeOpacity={0.7}
+              onPress={() => navigation.navigate('Workspace', { clientId: client.id, clientName: client.name })}
             >
-              <View style={styles.clientTop}>
-                {c.logo ? (
-                  <Image source={{ uri: c.logo }} style={styles.clientLogo} />
-                ) : (
-                  <View style={[styles.clientLogoPlaceholder, { backgroundColor: c.color + '15' }]}>
-                    <Text style={[styles.clientLogoLetter, { color: c.color }]}>{c.name[0]}</Text>
-                  </View>
-                )}
-                <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{c.name}</Text>
-                  <Text style={styles.clientSub}>{c.sub}</Text>
-                </View>
-                <View style={[styles.badge, c.status === 'live' ? styles.badgeLive : styles.badgeDraft]}>
-                  <Text style={[styles.badgeText, { color: c.status === 'live' ? COLORS.green : COLORS.yellow }]}>
-                    {c.status === 'live' ? '● Live' : '◌ Draft'}
-                  </Text>
-                </View>
+              <View style={[styles.cardIcon, { backgroundColor: client.color + '15' }]}>
+                <Text style={[styles.cardIconText, { color: client.color }]}>
+                  {client.name.charAt(0)}
+                </Text>
               </View>
-              <View style={styles.clientStats}>
-                <View style={styles.clientStat}>
-                  <Text style={styles.clientStatVal}>{dishCounts[c.id] || 0}</Text>
-                  <Text style={styles.clientStatLabel}>PLATS 3D</Text>
-                </View>
-                <View style={styles.clientStat}>
-                  <Text style={styles.clientStatVal}>{scanCounts[c.id] || 0}</Text>
-                  <Text style={styles.clientStatLabel}>SCANS AR</Text>
-                </View>
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle}>{client.name}</Text>
+                <Text style={styles.cardSub}>{client.sub}</Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                <Text style={[styles.statusText, { color: st.text }]}>
+                  {client.status === 'live' ? 'En ligne' : 'Brouillon'}
+                </Text>
               </View>
             </TouchableOpacity>
-          ))}
+          );
+        })}
 
-          {/* Add client card */}
-          <TouchableOpacity style={styles.addCard} onPress={addClient}>
-            <Text style={styles.addIcon}>+</Text>
-            <Text style={styles.addText}>Nouveau client</Text>
+        {/* Client Menu Preview */}
+        {clients.filter(c => c.status === 'live').map((client) => (
+          <TouchableOpacity
+            key={`preview-${client.id}`}
+            style={styles.previewBtn}
+            onPress={() => navigation.navigate('ClientPreview', { clientId: client.id, clientName: client.name })}
+          >
+            <Text style={styles.previewBtnText}>Voir le menu client : {client.name}</Text>
           </TouchableOpacity>
-        </View>
+        ))}
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
 
-function MetricCard({ icon, value, label, trend }: { icon: string; value: string; label: string; trend: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricIcon}>{icon}</Text>
-      <Text style={styles.metricVal}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricTrend}>{trend}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  topbar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10,
-    backgroundColor: 'rgba(255,255,255,.85)',
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.xl,
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center' },
-  logoIconText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  logoText: { fontSize: 16, fontWeight: '800', color: COLORS.text, letterSpacing: -0.3 },
-  avatar: { width: 32, height: 32, borderRadius: 9, backgroundColor: COLORS.brandLight, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 12, fontWeight: '700', color: COLORS.brand },
-  scroll: { flex: 1 },
-
-  metrics: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
-    padding: 16, paddingHorizontal: isTablet ? 32 : 20,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  metric: {
-    flex: 1, minWidth: (width - 60) / 2,
-    backgroundColor: COLORS.white, borderRadius: RADIUS.md,
-    padding: 16, borderWidth: 1, borderColor: COLORS.borderLight,
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.brand,
+    letterSpacing: 3,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: COLORS.text2,
+    marginTop: 2,
+  },
+  menuBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.brand,
+  },
+  menuIcon: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '600',
+    marginTop: -2,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    alignItems: 'center',
     ...SHADOWS.sm,
   },
-  metricIcon: { fontSize: 20, marginBottom: 8 },
-  metricVal: { fontSize: 24, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
-  metricLabel: { fontSize: 11, color: COLORS.text3, marginTop: 4, fontWeight: '500' },
-  metricTrend: { fontSize: 11, fontWeight: '600', color: COLORS.green, marginTop: 6 },
-
-  section: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: isTablet ? 32 : 20, paddingTop: 16, paddingBottom: 10,
+  statNum: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.brand,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.2 },
-  btnPrimary: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.brand, ...SHADOWS.brand,
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.text2,
+    marginTop: 2,
   },
-  btnPrimaryText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-
-  clientsGrid: { paddingHorizontal: isTablet ? 32 : 20 },
-  clientCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: 20,
-    borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.sm,
+  list: {
+    flex: 1,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.sm,
   },
-  clientTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  clientLogo: { width: 44, height: 44, borderRadius: RADIUS.sm, backgroundColor: COLORS.bg2 },
-  clientLogoPlaceholder: { width: 44, height: 44, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
-  clientLogoLetter: { fontSize: 18, fontWeight: '700' },
-  clientInfo: { flex: 1 },
-  clientName: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  clientSub: { fontSize: 11, color: COLORS.text3, marginTop: 1 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.xs },
-  badgeLive: { backgroundColor: COLORS.greenLight },
-  badgeDraft: { backgroundColor: COLORS.yellowLight },
-  badgeText: { fontSize: 10, fontWeight: '600' },
-  clientStats: {
-    flexDirection: 'row', gap: 12, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: COLORS.borderLight,
+  cardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
   },
-  clientStat: { flex: 1 },
-  clientStatVal: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  clientStatLabel: { fontSize: 9, color: COLORS.text3, letterSpacing: 1, marginTop: 1 },
-
-  addCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: 20,
-    borderWidth: 2, borderColor: COLORS.border, borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center', minHeight: 120,
-    marginBottom: 12,
+  cardIconText: {
+    fontSize: 22,
+    fontWeight: '800',
   },
-  addIcon: { fontSize: 28, color: COLORS.text3, marginBottom: 4 },
-  addText: { fontSize: 12, fontWeight: '600', color: COLORS.text3 },
+  cardBody: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  cardSub: {
+    fontSize: 13,
+    color: COLORS.text2,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  previewBtn: {
+    backgroundColor: COLORS.brandLight,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  previewBtnText: {
+    color: COLORS.brand,
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });

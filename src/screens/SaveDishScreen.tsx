@@ -1,194 +1,293 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Platform,
+  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
+  Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS, RADIUS, SHADOWS, SPACING, CATEGORIES } from '../constants/theme';
 import { Storage } from '../services/storage';
 
 export default function SaveDishScreen({ navigation, route }: any) {
-  const { clientId, vertices = 0, triangles = 0, modelUrl = '', photos = [] } = route?.params || {};
+  const insets = useSafeAreaInsets();
+  const { clientId, clientName, modelUrl, photoUri } = route.params;
+
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
-  const [cat, setCat] = useState('plats');
-  const [diam, setDiam] = useState('');
-  const [height, setHeight] = useState('');
-  const [opts, setOpts] = useState<{ n: string; p: string }[]>([]);
+  const [category, setCategory] = useState('plats');
+  const [saving, setSaving] = useState(false);
 
-  const addOpt = () => setOpts([...opts, { n: '', p: '' }]);
+  const cats = CATEGORIES.filter(c => c.id !== 'all');
 
   const save = async () => {
-    if (!name.trim()) return;
-    const sz = diam ? `⌀ ${diam}cm` : height ? `${height}cm` : '—';
-    await Storage.addDish(clientId, {
-      id: Date.now(),
-      name: name.trim(),
-      desc: desc.trim(),
-      price: parseFloat(price) || 0,
-      cat,
-      size: sz,
-      real: sz,
-      img: photos.length > 0 ? photos[0] : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=500&fit=crop',
-      model: modelUrl || '',
-      modelUrl: modelUrl || '',
-      photos: photos,
-      model3d: modelUrl || '',
-      opts: opts.filter(o => o.n.trim()).map(o => ({ n: o.n.trim(), p: parseFloat(o.p) || 0 })),
-      scans: 0,
-      vertices,
-    });
-    navigation.navigate('Workspace', { clientId });
+    if (!name.trim()) {
+      Alert.alert('Nom requis', 'Donnez un nom a votre plat.');
+      return;
+    }
+    if (!price.trim() || isNaN(parseFloat(price))) {
+      Alert.alert('Prix requis', 'Entrez un prix valide.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const dishes = await Storage.getDishes(clientId);
+      const newId = dishes.length > 0 ? Math.max(...dishes.map(d => d.id)) + 1 : 1;
+
+      await Storage.addDish(clientId, {
+        id: newId,
+        name: name.trim(),
+        desc: desc.trim(),
+        price: parseFloat(price),
+        cat: category,
+        size: '',
+        real: '',
+        img: photoUri || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=500&fit=crop',
+        model: modelUrl || '',
+        opts: [],
+        scans: 0,
+        vertices: 0,
+      });
+
+      // Go back to workspace
+      navigation.navigate('Workspace', { clientId, clientName });
+    } catch (err) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder le plat.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topbar}>
-        <Text style={styles.topTitle}>Nouveau <Text style={{ color: COLORS.brand }}>Plat</Text></Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelText}>✕ Annuler</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.form}>
-        <View style={styles.modelInfo}>
-          <View style={styles.modelIcon}>
-            <Text style={{ fontSize: 20 }}>◆</Text>
-          </View>
-          <Text style={styles.modelTitle}>Scan 3D validé</Text>
-          <Text style={styles.modelSub}>
-            {vertices.toLocaleString()} vertices · {triangles.toLocaleString()} triangles
-          </Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: COLORS.white }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>{'<'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Enregistrer le plat</Text>
+          <View style={{ width: 40 }} />
         </View>
 
-        <Field label="Nom du plat" value={name} onChange={setName} placeholder="Pizza Truffe & Burrata" />
-        <Field label="Description" value={desc} onChange={setDesc} placeholder="Ingrédients, préparation…" multiline />
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Name */}
+          <Text style={styles.label}>Nom du plat *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Pizza Truffe & Burrata"
+            placeholderTextColor={COLORS.text3}
+            value={name}
+            onChangeText={setName}
+          />
 
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Field label="Prix (€)" value={price} onChange={setPrice} placeholder="18.90" keyboard="decimal-pad" />
+          {/* Description */}
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={[styles.input, styles.inputMulti]}
+            placeholder="Ingredients, preparation..."
+            placeholderTextColor={COLORS.text3}
+            value={desc}
+            onChangeText={setDesc}
+            multiline
+            numberOfLines={3}
+          />
+
+          {/* Price */}
+          <Text style={styles.label}>Prix (EUR) *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="18.90"
+            placeholderTextColor={COLORS.text3}
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="decimal-pad"
+          />
+
+          {/* Category */}
+          <Text style={styles.label}>Categorie</Text>
+          <View style={styles.catGrid}>
+            {cats.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[
+                  styles.catChip,
+                  category === c.id && styles.catChipActive,
+                ]}
+                onPress={() => setCategory(c.id)}
+              >
+                <Text style={styles.catIcon}>{c.icon}</Text>
+                <Text style={[
+                  styles.catLabel,
+                  category === c.id && styles.catLabelActive,
+                ]}>{c.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>Catégorie</Text>
-            <View style={styles.selectWrap}>
-              {['entrees', 'plats', 'pizzas', 'burgers', 'desserts', 'boissons'].map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.catChip, cat === c && styles.catChipOn]}
-                  onPress={() => setCat(c)}
-                >
-                  <Text style={[styles.catChipText, cat === c && styles.catChipTextOn]}>{c}</Text>
-                </TouchableOpacity>
-              ))}
+
+          {/* Model info */}
+          {modelUrl ? (
+            <View style={styles.modelInfo}>
+              <Text style={styles.modelInfoIcon}>✓</Text>
+              <Text style={styles.modelInfoText}>Modele 3D attache</Text>
             </View>
-          </View>
+          ) : (
+            <View style={[styles.modelInfo, { backgroundColor: COLORS.yellowLight }]}>
+              <Text style={styles.modelInfoIcon}>!</Text>
+              <Text style={[styles.modelInfoText, { color: COLORS.yellow }]}>Aucun modele 3D</Text>
+            </View>
+          )}
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+
+        {/* Save button */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={save}
+            disabled={saving}
+          >
+            <Text style={styles.saveBtnText}>
+              {saving ? 'Enregistrement...' : 'Enregistrer'}
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Field label="Diamètre (cm)" value={diam} onChange={setDiam} placeholder="32" keyboard="decimal-pad" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Field label="Hauteur (cm)" value={height} onChange={setHeight} placeholder="5" keyboard="decimal-pad" />
-          </View>
-        </View>
-
-        <Text style={styles.fieldLabel}>Personnalisations</Text>
-        {opts.map((o, i) => (
-          <View key={i} style={styles.optRow}>
-            <TextInput
-              style={[styles.input, { flex: 2 }]}
-              placeholder="Option"
-              placeholderTextColor={COLORS.text4}
-              value={o.n}
-              onChangeText={t => { const n = [...opts]; n[i].n = t; setOpts(n); }}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="€"
-              placeholderTextColor={COLORS.text4}
-              keyboardType="decimal-pad"
-              value={o.p}
-              onChangeText={t => { const n = [...opts]; n[i].p = t; setOpts(n); }}
-            />
-          </View>
-        ))}
-        <TouchableOpacity style={styles.addOptBtn} onPress={addOpt}>
-          <Text style={styles.addOptText}>+ Ajouter option</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.saveBtn} onPress={save} activeOpacity={0.8}>
-          <Text style={styles.saveBtnText}>Publier sur le Menu</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
-  );
-}
-
-function Field({ label, value, onChange, placeholder, multiline, keyboard }: any) {
-  return (
-    <View style={{ marginBottom: 12 }}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={[styles.input, multiline && { minHeight: 60, textAlignVertical: 'top' }]}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={COLORS.text4}
-        multiline={multiline}
-        keyboardType={keyboard || 'default'}
-      />
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  topbar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 10 : 10, paddingBottom: 10,
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.white,
   },
-  topTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  cancelText: { fontSize: 12, fontWeight: '600', color: COLORS.text3 },
-  scroll: { flex: 1 },
-  form: { padding: 20, maxWidth: 480, alignSelf: 'center', width: '100%' },
-  modelInfo: { alignItems: 'center', marginBottom: 20 },
-  modelIcon: {
-    width: 56, height: 56, borderRadius: 14, backgroundColor: COLORS.brandLight,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 16,
   },
-  modelTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  modelSub: { fontSize: 9, color: COLORS.brand, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginTop: 2 },
-  fieldLabel: {
-    fontSize: 10, color: COLORS.text3, textTransform: 'uppercase',
-    letterSpacing: 1.5, fontWeight: '600', marginBottom: 4,
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIcon: {
+    fontSize: 20,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  scroll: {
+    flex: 1,
+    paddingHorizontal: SPACING.xl,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text2,
+    marginBottom: 6,
+    marginTop: 20,
   },
   input: {
-    padding: 10, paddingHorizontal: 14, borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
-    fontSize: 13, color: COLORS.text,
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: COLORS.text,
   },
-  row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  selectWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  inputMulti: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  catGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
   catChip: {
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-    backgroundColor: COLORS.surface2, borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  catChipOn: { backgroundColor: COLORS.brandLight, borderColor: COLORS.brand },
-  catChipText: { fontSize: 9, fontWeight: '600', color: COLORS.text3 },
-  catChipTextOn: { color: COLORS.brand },
-  optRow: { flexDirection: 'row', gap: 6, marginBottom: 4 },
-  addOptBtn: {
-    padding: 8, borderRadius: RADIUS.sm, alignItems: 'center',
-    backgroundColor: COLORS.surface2, borderWidth: 1, borderColor: COLORS.border,
-    marginTop: 6, marginBottom: 14,
+  catChipActive: {
+    backgroundColor: COLORS.brandLight,
+    borderColor: COLORS.brand,
   },
-  addOptText: { fontSize: 11, fontWeight: '600', color: COLORS.text3 },
+  catIcon: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  catLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text2,
+  },
+  catLabelActive: {
+    color: COLORS.brand,
+  },
+  modelInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.greenLight,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    marginTop: 24,
+  },
+  modelInfoIcon: {
+    fontSize: 18,
+    marginRight: 10,
+    color: COLORS.green,
+    fontWeight: '700',
+  },
+  modelInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.green,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: SPACING.xl,
+    paddingBottom: 32,
+    backgroundColor: COLORS.white,
+  },
   saveBtn: {
-    padding: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brand,
-    alignItems: 'center', ...SHADOWS.brand,
+    backgroundColor: COLORS.brand,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 16,
+    alignItems: 'center',
+    ...SHADOWS.brand,
   },
-  saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  saveBtnText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

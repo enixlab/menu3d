@@ -1,311 +1,203 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, Dimensions,
 } from 'react-native';
-import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
+import ModelViewer from '../components/ModelViewer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 
-const { width: W, height: H } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-export default function Preview3DScreen({ navigation, route }: any) {
-  const {
-    clientId,
-    totalPoints = 50000,
-    modelUrl = '',
-    photos = [],
-  } = route?.params || {};
-
-  const vertices = Math.max(totalPoints, 20000);
-  const triangles = Math.floor(vertices * 2);
-  const hasModel = !!modelUrl && modelUrl !== 'demo://model3d';
-
-  // Utiliser un modèle démo si pas de vrai modèle
-  const displayModelUrl = hasModel
-    ? modelUrl
-    : 'https://modelviewer.dev/shared-assets/models/Astronaut.glb';
-
-  // ============================================================
-  // HTML model-viewer — rendu 3D interactif natif
-  // ============================================================
-  const modelViewerHtml = `
-<!DOCTYPE html>
+function modelViewerHTML(modelUrl: string): string {
+  return `<!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0/model-viewer.min.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;font-family:-apple-system,sans-serif}
-    model-viewer{
-      width:100vw;
-      height:100vh;
-      --poster-color:transparent;
-      --progress-bar-color:#0047FF;
+    * { margin: 0; padding: 0; }
+    body { background: #F4F7FF; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      --poster-color: transparent;
     }
-    .hotspot{
-      background:rgba(0,71,255,0.9);
-      border-radius:20px;
-      padding:6px 12px;
-      font-size:11px;
-      color:white;
-      font-weight:600;
-      pointer-events:none;
-      white-space:nowrap;
+    .ar-btn {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0047FF;
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 32px rgba(0,71,255,0.25);
+      z-index: 10;
     }
-    .controls{
-      position:fixed;
-      bottom:20px;
-      left:50%;
-      transform:translateX(-50%);
-      display:flex;
-      gap:8px;
-      z-index:100;
-    }
-    .ctrl-btn{
-      background:rgba(255,255,255,0.12);
-      backdrop-filter:blur(10px);
-      border:1px solid rgba(255,255,255,0.15);
-      color:white;
-      border-radius:12px;
-      padding:10px 16px;
-      font-size:12px;
-      font-weight:600;
-      cursor:pointer;
-      transition:all 0.2s;
-    }
-    .ctrl-btn:hover,.ctrl-btn.active{
-      background:rgba(0,71,255,0.8);
-      border-color:#0047FF;
-    }
-    .stats{
-      position:fixed;
-      top:80px;
-      right:12px;
-      background:rgba(0,0,0,0.7);
-      backdrop-filter:blur(10px);
-      border:1px solid rgba(255,255,255,0.08);
-      border-radius:12px;
-      padding:10px 14px;
-      z-index:100;
-    }
-    .stat-row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
-    .stat-label{font-size:9px;color:rgba(255,255,255,0.4)}
-    .stat-value{font-size:9px;color:#00E676;font-weight:600;font-family:monospace}
-    .hint{
-      position:fixed;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      color:rgba(255,255,255,0.4);
-      font-size:13px;
-      pointer-events:none;
-      animation:fadeOut 3s forwards;
-      animation-delay:2s;
-    }
-    @keyframes fadeOut{to{opacity:0}}
-    .ar-badge{
-      position:fixed;
-      bottom:80px;
-      left:50%;
-      transform:translateX(-50%);
-      background:rgba(0,230,118,0.15);
-      border:1px solid rgba(0,230,118,0.3);
-      border-radius:20px;
-      padding:6px 16px;
-      display:flex;
-      align-items:center;
-      gap:6px;
-      z-index:100;
-    }
-    .ar-dot{width:6px;height:6px;border-radius:50%;background:#00E676}
-    .ar-text{font-size:11px;color:#00E676;font-weight:500}
   </style>
 </head>
 <body>
   <model-viewer
-    id="viewer"
-    src="${displayModelUrl}"
-    ar
-    ar-modes="webxr scene-viewer quick-look"
-    ar-scale="auto"
+    src="${modelUrl}"
+    auto-rotate
     camera-controls
     touch-action="pan-y"
-    auto-rotate
-    auto-rotate-delay="0"
-    rotation-per-second="20deg"
-    interaction-prompt="auto"
-    shadow-intensity="1.8"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    shadow-intensity="1"
     shadow-softness="1"
-    exposure="1.1"
     environment-image="neutral"
-    camera-orbit="0deg 65deg 2.5m"
-    min-camera-orbit="auto auto 1m"
-    max-camera-orbit="auto auto 10m"
-    field-of-view="30deg"
-    loading="eager"
-    reveal="auto"
-    alt="Plat 3D scanné"
+    exposure="1"
+    style="background-color: #F4F7FF;"
   >
-    <button slot="ar-button" style="
-      background:#0047FF;color:white;border:none;border-radius:16px;
-      padding:14px 28px;font-size:15px;font-weight:700;cursor:pointer;
-      position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
-      box-shadow:0 4px 24px rgba(0,71,255,0.5);z-index:200;
-    ">📱 Voir sur ma table</button>
+    <button slot="ar-button" class="ar-btn">📱 Voir sur ma table</button>
   </model-viewer>
-
-  <div class="hint">↻ Glissez pour tourner · Pincez pour zoomer</div>
-
-  <div class="stats">
-    <div class="stat-row"><span class="stat-label">Vertices</span><span class="stat-value">${vertices.toLocaleString()}</span></div>
-    <div class="stat-row"><span class="stat-label">Triangles</span><span class="stat-value">${triangles.toLocaleString()}</span></div>
-    <div class="stat-row"><span class="stat-label">Texture</span><span class="stat-value">4K</span></div>
-    <div class="stat-row"><span class="stat-label">Format</span><span class="stat-value">GLB</span></div>
-    <div class="stat-row"><span class="stat-label">AR</span><span class="stat-value">Ready</span></div>
-  </div>
-
-  <div class="ar-badge">
-    <div class="ar-dot"></div>
-    <span class="ar-text">AR disponible</span>
-  </div>
-
-  <div class="controls">
-    <button class="ctrl-btn active" onclick="toggleAutoRotate(this)">↻ Auto</button>
-    <button class="ctrl-btn" onclick="resetCamera()">⊙ Reset</button>
-    <button class="ctrl-btn" onclick="toggleWireframe(this)">◇ Wire</button>
-  </div>
-
-  <script>
-    const viewer = document.getElementById('viewer');
-    let wireMode = false;
-
-    function toggleAutoRotate(btn) {
-      viewer.autoRotate = !viewer.autoRotate;
-      btn.classList.toggle('active');
-    }
-
-    function resetCamera() {
-      viewer.cameraOrbit = '0deg 65deg 2.5m';
-      viewer.fieldOfView = '30deg';
-    }
-
-    function toggleWireframe(btn) {
-      wireMode = !wireMode;
-      btn.classList.toggle('active');
-      if (wireMode) {
-        viewer.style.filter = 'invert(1) hue-rotate(180deg)';
-        viewer.style.opacity = '0.8';
-      } else {
-        viewer.style.filter = 'none';
-        viewer.style.opacity = '1';
-      }
-    }
-  </script>
 </body>
 </html>`;
+}
+
+export default function Preview3DScreen({ navigation, route }: any) {
+  const insets = useSafeAreaInsets();
+  const { clientId, clientName, modelUrl, photoUri, dish } = route.params;
+
+  // Use modelUrl from params or from dish object
+  const glbUrl = modelUrl || dish?.model || dish?.modelUrl || dish?.model3d || '';
 
   return (
-    <View style={styles.container}>
-      {/* Model Viewer 3D */}
-      {Platform.OS === 'web' ? (
-        <iframe
-          srcDoc={modelViewerHtml}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            backgroundColor: '#0a0a0a',
-          } as any}
-          allow="xr-spatial-tracking; camera; gyroscope; accelerometer; fullscreen"
-          allowFullScreen
-        />
-      ) : (
-        <View style={styles.nativeFallback}>
-          <Text style={styles.nativeText}>
-            Ouvrez sur un navigateur web pour voir le modèle 3D interactif
-          </Text>
-        </View>
-      )}
-
-      {/* Top bar overlay */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
-          <Text style={{ color: '#fff', fontSize: 14 }}>✕</Text>
+    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backIcon}>{'<'}</Text>
         </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.topTitle}>Modèle 3D</Text>
-          <Text style={styles.topSub}>
-            {hasModel ? 'Reconstruction IA' : 'Aperçu démo'} · {photos.length} captures
-          </Text>
-        </View>
-        <View style={{ width: 36 }} />
+        <Text style={styles.headerTitle}>{dish?.name || 'Apercu 3D'}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Bottom actions */}
-      <View style={styles.bottom}>
-        <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.btnGhost} onPress={() => navigation.navigate('Scanner', { clientId })}>
-            <Text style={styles.btnGhostText}>↺ Re-scanner</Text>
-          </TouchableOpacity>
+      {/* 3D Viewer */}
+      <View style={styles.viewerContainer}>
+        {glbUrl ? (
+          <ModelViewer html={modelViewerHTML(glbUrl)} style={styles.webview} />
+        ) : (
+          <View style={styles.noModel}>
+            <Text style={styles.noModelText}>Aucun modele 3D disponible</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        {(clientId && (modelUrl || photoUri)) && (
           <TouchableOpacity
-            style={styles.btnBlue}
+            style={styles.saveBtn}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('SaveDish', {
               clientId,
-              vertices,
-              triangles,
-              modelUrl: displayModelUrl,
-              photos,
+              clientName,
+              modelUrl: glbUrl,
+              photoUri,
             })}
           >
-            <Text style={styles.btnBlueText}>Enregistrer →</Text>
+            <Text style={styles.saveBtnText}>Enregistrer ce plat</Text>
           </TouchableOpacity>
-        </View>
+        )}
+
+        {dish && (
+          <TouchableOpacity
+            style={styles.arBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('ARViewer', { dish, modelUrl: glbUrl })}
+          >
+            <Text style={styles.arBtnText}>📱 Vue AR</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-
-  // Native fallback
-  nativeFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  nativeText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center' },
-
-  // Top bar
-  topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
-    paddingTop: Platform.OS === 'ios' ? 54 : 14, paddingHorizontal: 14,
-    paddingBottom: 10,
-    flexDirection: 'row', alignItems: 'flex-start',
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.white,
   },
-  closeBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 12,
   },
-  topTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  topSub: {
-    fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginTop: 2,
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  // Bottom
-  bottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 16,
-    paddingTop: 14,
+  backIcon: {
+    fontSize: 20,
+    color: COLORS.text,
+    fontWeight: '600',
   },
-  btnRow: { flexDirection: 'row', gap: 8 },
-  btnGhost: {
-    flex: 1, padding: 12, borderRadius: RADIUS.sm,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  viewerContainer: {
+    flex: 1,
+    margin: SPACING.lg,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    backgroundColor: '#F4F7FF',
+    ...SHADOWS.md,
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: '#F4F7FF',
+  },
+  noModel: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noModelText: {
+    fontSize: 16,
+    color: COLORS.text3,
+  },
+  actions: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 32,
+    gap: 10,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.brand,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 16,
+    alignItems: 'center',
+    ...SHADOWS.brand,
+  },
+  saveBtnText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  arBtn: {
+    backgroundColor: COLORS.brandLight,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  btnGhostText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
-  btnBlue: {
-    flex: 1, padding: 12, borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.brand, alignItems: 'center', ...SHADOWS.brand,
+  arBtnText: {
+    color: COLORS.brand,
+    fontSize: 16,
+    fontWeight: '700',
   },
-  btnBlueText: { fontSize: 12, fontWeight: '600', color: '#fff' },
 });

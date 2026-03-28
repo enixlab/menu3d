@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AuthScreen from './src/screens/AuthScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import WorkspaceScreen from './src/screens/WorkspaceScreen';
-import ScannerScreen from './src/screens/ScannerScreen';
+import UploadScreen from './src/screens/UploadScreen';
 import Preview3DScreen from './src/screens/Preview3DScreen';
 import SaveDishScreen from './src/screens/SaveDishScreen';
 import ClientMenuScreen from './src/screens/ClientMenuScreen';
@@ -51,14 +51,14 @@ export default function App() {
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_right',
-            contentStyle: { backgroundColor: '#F8F9FC' },
+            contentStyle: { backgroundColor: '#FFFFFF' },
           }}
         >
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="Workspace" component={WorkspaceScreen} />
           <Stack.Screen
-            name="Scanner"
-            component={ScannerScreen}
+            name="Upload"
+            component={UploadScreen}
             options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
           />
           <Stack.Screen
