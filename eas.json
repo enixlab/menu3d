@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 10.0.0"
+    "version": ">= 10.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -22,13 +23,18 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "autoIncrement": true
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "enix.lab.ai@gmail.com"
+        "appleId": "contact@minyzia.fr",
+        "appleTeamId": "TRX9J5U7L6",
+        "ascAppId": "com.enixlab.menu3d"
       }
     }
   }

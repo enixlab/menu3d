@@ -1,6 +1,3 @@
-node_modules/
-.expo/
-dist/
-android/
-ios/
-.vercel/
+node_modules
+.expo
+dist

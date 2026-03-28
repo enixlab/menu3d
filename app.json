@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.enixlab.menu3d",
       "infoPlist": {
         "NSCameraUsageDescription": "Menu3D utilise la caméra pour scanner vos plats en 3D",
-        "NSPhotoLibraryUsageDescription": "Pour importer des logos et bannières"
+        "NSPhotoLibraryUsageDescription": "Pour importer des logos et bannières",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,11 +28,31 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png"
       },
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
-      ["expo-camera", { "cameraPermission": "Menu3D a besoin de la caméra pour scanner les plats en 3D" }],
-      ["expo-image-picker", { "photosPermission": "Pour importer logos et bannières" }]
-    ]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Menu3D a besoin de la caméra pour scanner les plats en 3D"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pour importer logos et bannières"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5e5f08d4-ce19-4f0d-b042-92aec2b12bce"
+      }
+    },
+    "owner": "enix-lab"
   }
 }
