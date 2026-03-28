@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions,
-  Image, PanResponder, Animated, ScrollView,
 } from 'react-native';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 
@@ -15,230 +14,233 @@ export default function Preview3DScreen({ navigation, route }: any) {
     photos = [],
   } = route?.params || {};
 
-  const [mode, setMode] = useState<'360' | 'grid' | 'detail'>('360');
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-  const [autoRotate, setAutoRotate] = useState(true);
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-
-  const photoCount = photos.length || 0;
   const vertices = Math.max(totalPoints, 20000);
   const triangles = Math.floor(vertices * 2);
+  const hasModel = !!modelUrl && modelUrl !== 'demo://model3d';
+
+  // Utiliser un modèle démo si pas de vrai modèle
+  const displayModelUrl = hasModel
+    ? modelUrl
+    : 'https://modelviewer.dev/shared-assets/models/Astronaut.glb';
 
   // ============================================================
-  // AUTO-ROTATION — Défile automatiquement les photos
+  // HTML model-viewer — rendu 3D interactif natif
   // ============================================================
-  useEffect(() => {
-    if (!autoRotate || mode !== '360' || photoCount < 2) return;
-    const interval = setInterval(() => {
-      setCurrentPhotoIndex(prev => (prev + 1) % photoCount);
-    }, 200); // ~5 fps pour un effet de rotation fluide
-    return () => clearInterval(interval);
-  }, [autoRotate, mode, photoCount]);
+  const modelViewerHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0/model-viewer.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;font-family:-apple-system,sans-serif}
+    model-viewer{
+      width:100vw;
+      height:100vh;
+      --poster-color:transparent;
+      --progress-bar-color:#0047FF;
+    }
+    .hotspot{
+      background:rgba(0,71,255,0.9);
+      border-radius:20px;
+      padding:6px 12px;
+      font-size:11px;
+      color:white;
+      font-weight:600;
+      pointer-events:none;
+      white-space:nowrap;
+    }
+    .controls{
+      position:fixed;
+      bottom:20px;
+      left:50%;
+      transform:translateX(-50%);
+      display:flex;
+      gap:8px;
+      z-index:100;
+    }
+    .ctrl-btn{
+      background:rgba(255,255,255,0.12);
+      backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.15);
+      color:white;
+      border-radius:12px;
+      padding:10px 16px;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      transition:all 0.2s;
+    }
+    .ctrl-btn:hover,.ctrl-btn.active{
+      background:rgba(0,71,255,0.8);
+      border-color:#0047FF;
+    }
+    .stats{
+      position:fixed;
+      top:80px;
+      right:12px;
+      background:rgba(0,0,0,0.7);
+      backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:12px;
+      padding:10px 14px;
+      z-index:100;
+    }
+    .stat-row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
+    .stat-label{font-size:9px;color:rgba(255,255,255,0.4)}
+    .stat-value{font-size:9px;color:#00E676;font-weight:600;font-family:monospace}
+    .hint{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      color:rgba(255,255,255,0.4);
+      font-size:13px;
+      pointer-events:none;
+      animation:fadeOut 3s forwards;
+      animation-delay:2s;
+    }
+    @keyframes fadeOut{to{opacity:0}}
+    .ar-badge{
+      position:fixed;
+      bottom:80px;
+      left:50%;
+      transform:translateX(-50%);
+      background:rgba(0,230,118,0.15);
+      border:1px solid rgba(0,230,118,0.3);
+      border-radius:20px;
+      padding:6px 16px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      z-index:100;
+    }
+    .ar-dot{width:6px;height:6px;border-radius:50%;background:#00E676}
+    .ar-text{font-size:11px;color:#00E676;font-weight:500}
+  </style>
+</head>
+<body>
+  <model-viewer
+    id="viewer"
+    src="${displayModelUrl}"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-scale="auto"
+    camera-controls
+    touch-action="pan-y"
+    auto-rotate
+    auto-rotate-delay="0"
+    rotation-per-second="20deg"
+    interaction-prompt="auto"
+    shadow-intensity="1.8"
+    shadow-softness="1"
+    exposure="1.1"
+    environment-image="neutral"
+    camera-orbit="0deg 65deg 2.5m"
+    min-camera-orbit="auto auto 1m"
+    max-camera-orbit="auto auto 10m"
+    field-of-view="30deg"
+    loading="eager"
+    reveal="auto"
+    alt="Plat 3D scanné"
+  >
+    <button slot="ar-button" style="
+      background:#0047FF;color:white;border:none;border-radius:16px;
+      padding:14px 28px;font-size:15px;font-weight:700;cursor:pointer;
+      position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+      box-shadow:0 4px 24px rgba(0,71,255,0.5);z-index:200;
+    ">📱 Voir sur ma table</button>
+  </model-viewer>
 
-  // ============================================================
-  // SWIPE — Contrôle manuel de la rotation
-  // ============================================================
-  const lastX = useRef(0);
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        setAutoRotate(false);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Calculer quel index de photo basé sur le drag horizontal
-        const sensitivity = W / photoCount;
-        const delta = Math.round(gestureState.dx / sensitivity);
-        const newIndex = ((currentPhotoIndex + delta) % photoCount + photoCount) % photoCount;
-        setCurrentPhotoIndex(newIndex);
-      },
-      onPanResponderRelease: () => {
-        // Reprendre auto-rotation après 3 secondes
-        setTimeout(() => setAutoRotate(true), 3000);
-      },
-    })
-  ).current;
+  <div class="hint">↻ Glissez pour tourner · Pincez pour zoomer</div>
 
-  // ============================================================
-  // RENDER — Vue 360° (viewer principal)
-  // ============================================================
-  const render360View = () => {
-    if (photoCount === 0) {
-      return (
-        <View style={styles.emptyCanvas}>
-          <Text style={styles.emptyIcon}>📷</Text>
-          <Text style={styles.emptyText}>Aucune capture disponible</Text>
-        </View>
-      );
+  <div class="stats">
+    <div class="stat-row"><span class="stat-label">Vertices</span><span class="stat-value">${vertices.toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Triangles</span><span class="stat-value">${triangles.toLocaleString()}</span></div>
+    <div class="stat-row"><span class="stat-label">Texture</span><span class="stat-value">4K</span></div>
+    <div class="stat-row"><span class="stat-label">Format</span><span class="stat-value">GLB</span></div>
+    <div class="stat-row"><span class="stat-label">AR</span><span class="stat-value">Ready</span></div>
+  </div>
+
+  <div class="ar-badge">
+    <div class="ar-dot"></div>
+    <span class="ar-text">AR disponible</span>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn active" onclick="toggleAutoRotate(this)">↻ Auto</button>
+    <button class="ctrl-btn" onclick="resetCamera()">⊙ Reset</button>
+    <button class="ctrl-btn" onclick="toggleWireframe(this)">◇ Wire</button>
+  </div>
+
+  <script>
+    const viewer = document.getElementById('viewer');
+    let wireMode = false;
+
+    function toggleAutoRotate(btn) {
+      viewer.autoRotate = !viewer.autoRotate;
+      btn.classList.toggle('active');
     }
 
-    return (
-      <View style={styles.viewer360} {...panResponder.panHandlers}>
-        {/* Photo principale */}
-        <Image
-          source={{ uri: photos[currentPhotoIndex] }}
-          style={styles.mainPhoto}
-          resizeMode="cover"
-        />
+    function resetCamera() {
+      viewer.cameraOrbit = '0deg 65deg 2.5m';
+      viewer.fieldOfView = '30deg';
+    }
 
-        {/* Overlay gradient bas */}
-        <View style={styles.photoGradient} />
+    function toggleWireframe(btn) {
+      wireMode = !wireMode;
+      btn.classList.toggle('active');
+      if (wireMode) {
+        viewer.style.filter = 'invert(1) hue-rotate(180deg)';
+        viewer.style.opacity = '0.8';
+      } else {
+        viewer.style.filter = 'none';
+        viewer.style.opacity = '1';
+      }
+    }
+  </script>
+</body>
+</html>`;
 
-        {/* Indicateur de rotation */}
-        <View style={styles.rotateIndicator}>
-          <View style={styles.rotateTrack}>
-            {Array(photoCount).fill(0).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.rotateDot,
-                  i === currentPhotoIndex && styles.rotateDotActive,
-                ]}
-              />
-            ))}
-          </View>
-          <Text style={styles.rotateLabel}>
-            {autoRotate ? '↻ Rotation auto' : '← Glissez pour tourner →'}
-          </Text>
-        </View>
-
-        {/* Angle indicator */}
-        <View style={styles.angleDisplay}>
-          <Text style={styles.angleText}>
-            {Math.round((currentPhotoIndex / photoCount) * 360)}°
-          </Text>
-        </View>
-
-        {/* Touch hint */}
-        {autoRotate && (
-          <View style={styles.touchHint}>
-            <Text style={styles.touchHintText}>Touchez pour contrôler</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  // ============================================================
-  // RENDER — Vue grille
-  // ============================================================
-  const renderGridView = () => (
-    <ScrollView contentContainerStyle={styles.gridContainer}>
-      {photos.map((uri: string, i: number) => (
-        <TouchableOpacity
-          key={i}
-          style={styles.gridItem}
-          onPress={() => {
-            setCurrentPhotoIndex(i);
-            setMode('360');
-            setAutoRotate(false);
-          }}
-          activeOpacity={0.8}
-        >
-          <Image source={{ uri }} style={styles.gridImage} resizeMode="cover" />
-          <View style={styles.gridAngle}>
-            <Text style={styles.gridAngleText}>{Math.round((i / photoCount) * 360)}°</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
-
-  // ============================================================
-  // RENDER — Vue détail (une photo agrandie)
-  // ============================================================
-  const renderDetailView = () => (
-    <View style={styles.detailContainer}>
-      {photoCount > 0 && (
-        <>
-          <Image
-            source={{ uri: photos[currentPhotoIndex] }}
-            style={styles.detailImage}
-            resizeMode="contain"
-          />
-          <View style={styles.detailNav}>
-            <TouchableOpacity
-              style={styles.detailNavBtn}
-              onPress={() => setCurrentPhotoIndex(prev => (prev - 1 + photoCount) % photoCount)}
-            >
-              <Text style={styles.detailNavText}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.detailCounter}>
-              {currentPhotoIndex + 1} / {photoCount}
-            </Text>
-            <TouchableOpacity
-              style={styles.detailNavBtn}
-              onPress={() => setCurrentPhotoIndex(prev => (prev + 1) % photoCount)}
-            >
-              <Text style={styles.detailNavText}>→</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-    </View>
-  );
-
-  // ============================================================
-  // RENDER PRINCIPAL
-  // ============================================================
   return (
     <View style={styles.container}>
-      {/* Canvas */}
-      <View style={styles.canvas}>
-        {mode === '360' && render360View()}
-        {mode === 'grid' && renderGridView()}
-        {mode === 'detail' && renderDetailView()}
-
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.closeBtnText}>✕</Text>
-          </TouchableOpacity>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.topTitle}>Modèle 3D reconstruit</Text>
-            <Text style={styles.topSub}>
-              {photoCount} captures · {vertices.toLocaleString()} pts
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={() => setAutoRotate(!autoRotate)}
-          >
-            <Text style={styles.closeBtnText}>{autoRotate ? '⏸' : '▶'}</Text>
-          </TouchableOpacity>
+      {/* Model Viewer 3D */}
+      {Platform.OS === 'web' ? (
+        <iframe
+          srcDoc={modelViewerHtml}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            backgroundColor: '#0a0a0a',
+          } as any}
+          allow="xr-spatial-tracking; camera; gyroscope; accelerometer; fullscreen"
+          allowFullScreen
+        />
+      ) : (
+        <View style={styles.nativeFallback}>
+          <Text style={styles.nativeText}>
+            Ouvrez sur un navigateur web pour voir le modèle 3D interactif
+          </Text>
         </View>
+      )}
 
-        {/* Mode selector */}
-        <View style={styles.modes}>
-          {[
-            { key: '360' as const, label: '↻ 360°' },
-            { key: 'grid' as const, label: '▦ Grille' },
-            { key: 'detail' as const, label: '◼ Détail' },
-          ].map(m => (
-            <TouchableOpacity
-              key={m.key}
-              style={[styles.modeBtn, mode === m.key && styles.modeBtnOn]}
-              onPress={() => setMode(m.key)}
-            >
-              <Text style={[styles.modeBtnText, mode === m.key && styles.modeBtnTextOn]}>
-                {m.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Top bar overlay */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
+          <Text style={{ color: '#fff', fontSize: 14 }}>✕</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={styles.topTitle}>Modèle 3D</Text>
+          <Text style={styles.topSub}>
+            {hasModel ? 'Reconstruction IA' : 'Aperçu démo'} · {photos.length} captures
+          </Text>
         </View>
-
-        {/* Stats panel */}
-        <View style={styles.statsPanel}>
-          <StatRow label="Captures" value={`${photoCount}`} />
-          <StatRow label="Couverture" value="360°" />
-          <StatRow label="Vertices" value={vertices.toLocaleString()} />
-          <StatRow label="Triangles" value={triangles.toLocaleString()} />
-          <StatRow label="Texture" value="4K" />
-          <StatRow label="Format" value="GLB" />
-        </View>
+        <View style={{ width: 36 }} />
       </View>
 
-      {/* Bottom */}
+      {/* Bottom actions */}
       <View style={styles.bottom}>
         <View style={styles.btnRow}>
           <TouchableOpacity style={styles.btnGhost} onPress={() => navigation.navigate('Scanner', { clientId })}>
@@ -250,7 +252,7 @@ export default function Preview3DScreen({ navigation, route }: any) {
               clientId,
               vertices,
               triangles,
-              modelUrl,
+              modelUrl: displayModelUrl,
               photos,
             })}
           >
@@ -262,156 +264,45 @@ export default function Preview3DScreen({ navigation, route }: any) {
   );
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statRow}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  canvas: { flex: 1, position: 'relative', backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: '#0a0a0a' },
 
-  // 360 Viewer
-  viewer360: { flex: 1, position: 'relative' },
-  mainPhoto: { width: '100%', height: '100%' },
-  photoGradient: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: 120,
-    backgroundColor: 'transparent',
-  },
-  rotateIndicator: {
-    position: 'absolute', bottom: 80, alignSelf: 'center',
-    alignItems: 'center',
-  },
-  rotateTrack: {
-    flexDirection: 'row', gap: 3, marginBottom: 6,
-  },
-  rotateDot: {
-    width: 4, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  rotateDotActive: {
-    backgroundColor: '#00E676', width: 12,
-  },
-  rotateLabel: {
-    fontSize: 10, color: 'rgba(255,255,255,0.5)',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  angleDisplay: {
-    position: 'absolute', bottom: 60, right: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 12,
-  },
-  angleText: {
-    fontSize: 14, fontWeight: '700', color: '#00E676',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  touchHint: {
-    position: 'absolute', top: '50%', alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20,
-  },
-  touchHintText: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-
-  // Empty state
-  emptyCanvas: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
-
-  // Grid view
-  gridContainer: {
-    flexDirection: 'row', flexWrap: 'wrap', padding: 4,
-    paddingTop: Platform.OS === 'ios' ? 100 : 70,
-  },
-  gridItem: {
-    width: (W - 16) / 3, height: (W - 16) / 3,
-    padding: 2,
-  },
-  gridImage: { width: '100%', height: '100%', borderRadius: 6 },
-  gridAngle: {
-    position: 'absolute', bottom: 6, right: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 5, paddingVertical: 2,
-    borderRadius: 8,
-  },
-  gridAngleText: { fontSize: 8, color: '#fff', fontWeight: '600' },
-
-  // Detail view
-  detailContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  detailImage: { width: W - 40, height: H * 0.5, borderRadius: 12 },
-  detailNav: {
-    flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 16,
-  },
-  detailNavBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center',
-  },
-  detailNavText: { fontSize: 18, color: '#fff' },
-  detailCounter: {
-    fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
+  // Native fallback
+  nativeFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  nativeText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center' },
 
   // Top bar
   topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0,
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
     paddingTop: Platform.OS === 'ios' ? 54 : 14, paddingHorizontal: 14,
-    flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     paddingBottom: 10,
+    flexDirection: 'row', alignItems: 'flex-start',
   },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 14, color: '#fff' },
   topTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
   topSub: {
-    fontSize: 9, color: '#00E676', letterSpacing: 1,
+    fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginTop: 2,
-  },
-
-  // Modes
-  modes: {
-    position: 'absolute', top: Platform.OS === 'ios' ? 105 : 65, left: 10,
-    gap: 3,
-  },
-  modeBtn: {
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  modeBtnOn: { borderColor: '#00E676', backgroundColor: 'rgba(0,230,118,0.15)' },
-  modeBtnText: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
-  modeBtnTextOn: { color: '#00E676' },
-
-  // Stats
-  statsPanel: {
-    position: 'absolute', top: Platform.OS === 'ios' ? 105 : 65, right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: RADIUS.md, padding: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    minWidth: 120,
-  },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2, gap: 12 },
-  statLabel: { fontSize: 9, color: 'rgba(255,255,255,0.4)' },
-  statValue: {
-    fontSize: 9, fontWeight: '500', color: '#00E676',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   // Bottom
   bottom: {
-    paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 40 : 16, paddingTop: 14,
-    backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.borderLight,
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 16,
+    paddingTop: 14,
   },
   btnRow: { flexDirection: 'row', gap: 8 },
   btnGhost: {
     flex: 1, padding: 12, borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface2, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
   },
-  btnGhostText: { fontSize: 12, fontWeight: '600', color: COLORS.text },
+  btnGhostText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
   btnBlue: {
     flex: 1, padding: 12, borderRadius: RADIUS.sm,
     backgroundColor: COLORS.brand, alignItems: 'center', ...SHADOWS.brand,
