@@ -6,7 +6,7 @@ import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { Storage } from '../services/storage';
 
 export default function SaveDishScreen({ navigation, route }: any) {
-  const { clientId, vertices = 0, triangles = 0 } = route?.params || {};
+  const { clientId, vertices = 0, triangles = 0, modelUrl = '', photos = [] } = route?.params || {};
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
@@ -28,8 +28,11 @@ export default function SaveDishScreen({ navigation, route }: any) {
       cat,
       size: sz,
       real: sz,
-      img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=500&fit=crop',
-      model: 'https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb',
+      img: photos.length > 0 ? photos[0] : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=500&fit=crop',
+      model: modelUrl || '',
+      modelUrl: modelUrl || '',
+      photos: photos,
+      model3d: modelUrl || '',
       opts: opts.filter(o => o.n.trim()).map(o => ({ n: o.n.trim(), p: parseFloat(o.p) || 0 })),
       scans: 0,
       vertices,

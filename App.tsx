@@ -12,6 +12,7 @@ import ScannerScreen from './src/screens/ScannerScreen';
 import Preview3DScreen from './src/screens/Preview3DScreen';
 import SaveDishScreen from './src/screens/SaveDishScreen';
 import ClientMenuScreen from './src/screens/ClientMenuScreen';
+import ARViewerScreen from './src/screens/ARViewerScreen';
 import { Storage } from './src/services/storage';
 
 const Stack = createNativeStackNavigator();
@@ -70,6 +71,11 @@ export default function App() {
             name="ClientPreview"
             component={ClientMenuScreen}
             options={{ animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="ARViewer"
+            component={ARViewerScreen}
+            options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
           />
         </Stack.Navigator>
       </NavigationContainer>
