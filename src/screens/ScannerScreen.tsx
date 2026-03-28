@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { Meshy } from '../services/meshy';
+import { Trellis } from '../services/trellis';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -250,19 +251,34 @@ export default function ScannerScreen({ navigation, route }: any) {
     try {
       const mainPhoto = photos[0];
 
-      if (!Meshy.getApiKey()) {
-        simulateReconstruction();
-        return;
-      }
-
-      const modelUrls = await Meshy.scanDish(mainPhoto, (progress, step) => {
+      // Essayer TRELLIS (gratuit, pas de clé API)
+      setProcessingStep('Connexion à TRELLIS AI (Microsoft)...');
+      const result = await Trellis.imageToGlb(mainPhoto, (progress, step) => {
         setProcessingProgress(progress);
         setProcessingStep(step);
       });
 
-      setResultModelUrl(modelUrls.glb);
-      setPhase('done');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (result.glbUrl) {
+        setResultModelUrl(result.glbUrl);
+        setPhase('done');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
+      // Fallback Meshy si TRELLIS échoue
+      if (Meshy.getApiKey()) {
+        const modelUrls = await Meshy.scanDish(mainPhoto, (progress, step) => {
+          setProcessingProgress(progress);
+          setProcessingStep(step);
+        });
+        setResultModelUrl(modelUrls.glb);
+        setPhase('done');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
+      // Fallback démo
+      simulateReconstruction();
     } catch (err: any) {
       console.error('Erreur reconstruction:', err);
       simulateReconstruction();
