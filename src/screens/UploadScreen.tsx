@@ -55,29 +55,76 @@ export default function UploadScreen({ navigation, route }: any) {
   const startReconstruction = async (uri: string) => {
     setStep('processing');
     setProgress(0);
-    setProgressLabel('Demarrage...');
+    setProgressLabel('Connexion au serveur IA...');
+
+    // Timeout de 90s max — les HF Spaces gratuits sont lents
+    const timeoutPromise = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 90000)
+    );
+
+    // Progress simulé pendant l'attente (les vrais updates viendront du service)
+    let simInterval: any = null;
+    let currentSimProgress = 0;
+    simInterval = setInterval(() => {
+      currentSimProgress = Math.min(currentSimProgress + 2, 85);
+      setProgress(currentSimProgress);
+    }, 2000);
 
     try {
-      const glbUrl = await Reconstruction3D.fromPhoto(uri, (p, label) => {
-        setProgress(p);
-        setProgressLabel(label);
-      });
+      const glbUrl = await Promise.race([
+        Reconstruction3D.fromPhoto(uri, (p, label) => {
+          clearInterval(simInterval);
+          setProgress(p);
+          setProgressLabel(label);
+        }),
+        timeoutPromise,
+      ]);
 
-      if (!glbUrl) throw new Error('Aucun modele genere');
+      clearInterval(simInterval);
+
+      if (!glbUrl) throw new Error('empty');
 
       setModelUrl(glbUrl);
       setProgress(100);
       setProgressLabel('Modele 3D pret !');
       setStep('done');
     } catch (err: any) {
-      Alert.alert(
-        'Erreur de reconstruction',
-        err.message || 'Le service est temporairement indisponible. Reessayez.',
-        [
-          { text: 'Reessayer', onPress: () => { setStep('pick'); setPhotoUri(null); } },
-          { text: 'Annuler', onPress: () => navigation.goBack() },
-        ]
-      );
+      clearInterval(simInterval);
+
+      if (err.message === 'timeout') {
+        // Timeout → proposer de continuer sans 3D ou retenter
+        Alert.alert(
+          'Reconstruction lente',
+          'Les serveurs IA gratuits sont surcharges. Vous pouvez :\n\n• Sauvegarder le plat avec la photo (sans 3D)\n• Reessayer plus tard',
+          [
+            {
+              text: 'Sauvegarder sans 3D',
+              onPress: () => {
+                setModelUrl('');
+                setStep('done');
+              },
+            },
+            { text: 'Reessayer', onPress: () => startReconstruction(uri) },
+            { text: 'Annuler', onPress: () => { setStep('pick'); setPhotoUri(null); }, style: 'cancel' },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Service indisponible',
+          'Les serveurs de reconstruction 3D sont temporairement indisponibles.',
+          [
+            {
+              text: 'Sauvegarder sans 3D',
+              onPress: () => {
+                setModelUrl('');
+                setStep('done');
+              },
+            },
+            { text: 'Reessayer', onPress: () => startReconstruction(uri) },
+            { text: 'Annuler', onPress: () => navigation.goBack(), style: 'cancel' },
+          ]
+        );
+      }
     }
   };
 
